@@ -1,10 +1,12 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
 import random
-
+#
 #Dictionary 
 DIFFICULTY_LEVELS = {
-    "Easy":   {"ops": ["+", "-"],           "range": (1, 10)},
-    "Medium": {"ops": ["+", "-", "*"],      "range": (2, 12)},
-    "Hard":   {"ops": ["+", "-", "*", "/"], "range": (3, 15)},
+    "Easy":   {"ops": ["+", "-"],           "range": (1, 1000)},
+    "Medium": {"ops": ["+", "-", "*"],      "range": (2, 10000)},
+    "Hard":   {"ops": ["+", "-", "*", "/"], "range": (3, 10000)},
 }
 
 #Functions
@@ -37,14 +39,11 @@ def draw_reward():
     reward = random.choices(REWARD_OUTCOMES, weights=REWARD_WEIGHTS, k=1)[0]
     return reward
 
-
-import tkinter as tk
-from tkinter import ttk, messagebox
-from core import DIFFICULTY_LEVELS, generate_question, draw_reward
-
     
 BIG_FONT = ("Segoe UI", 14)
-TITLE_FONT = ("Segoe UI", 18, "bold")
+MIDDLE_FONT = ("Segoe UI", 13)
+TITLE_FONT = ("Segoe UI", 20, "bold")
+
 
 class App(tk.Tk):
     def __init__(self):
@@ -58,7 +57,8 @@ class App(tk.Tk):
             "attempts": 0,
             "correct": 0,
             "coins": 0,
-            "history": []  # each item: {"q": str, "given": str, "ok": bool, "coins": int}
+            "history": [],  # each item: {"q": str, "given": str, "ok": bool, "coins": int}
+            "by_level": {lvl: {"attempts": 0, "correct": 0, "coins": 0} for lvl in DIFFICULTY_LEVELS.keys()}
         }
 
         # UI state
@@ -96,33 +96,39 @@ class App(tk.Tk):
         self._show("home")
 
     # ---------- Builders ----------
+    # Creates the home screen of the game
     def _build_home(self):
         f = self.screens["home"]
+
+        #Explaination of what the application is
+        self.explain_text = tk.StringVar()
+        self.explain_text.set("          Level up your math skills with \n fun challenges and unpredictable rewards!\n     ")
+
+        ttk.Label(f, textvariable=self.explain_text, justify = "left", wraplength = 500, font=MIDDLE_FONT).pack(pady=4, anchor="center")
         
-        tk.Button(f, text="Choose Difficulty", font=BIG_FONT,
-          command=lambda: self._show("difficulty")).pack(pady=6)
+        # Give choice to choose difficulty of the game
+        tk.Button(f, text="Choose Difficulty", font=BIG_FONT, anchor="center", command=lambda: self._show("difficulty")).pack(pady=6)
 
-        self.home_info = tk.Label(f, text=self._stats_text(long=True), font=("Segoe UI", 16), justify="left")
-        self.home_info.pack(pady=6)
-
+    # Creates screen to select difficulty level
     def _build_difficulty(self):
         f = self.screens["difficulty"]
         tk.Label(f, text="Choose difficulty and start practice.", font=BIG_FONT).pack(pady=10)
 
+        #Difficulty options
         dd = tk.OptionMenu(f, self.current_level, *DIFFICULTY_LEVELS.keys())
         dd.config(font=BIG_FONT)
         dd.pack(pady=8)
 
         self.message_text = tk.StringVar()
-        self.message_text.set("Easy only inculdes + & - \n Medium only inculdes +, - & x \n Hard inculdes +, -, x & ÷.")
+        self.message_text.set("Easy only inculdes + and - \n Medium only inculdes +, - and x \n Hard inculdes +, -, x and ÷.")
 
-        ttk.Label(f, textvariable=self.message_text, justify = "left", wraplength = 500).pack(pady=4, anchor="center")
+        # Adding controls
+        ttk.Label(f, textvariable=self.message_text, justify = "left", wraplength = 500, font=MIDDLE_FONT).pack(pady=4, anchor="center")
 
-        ttk.Button(f, text="Start Practice",
-                   command=self._start_practice).pack(pady=10)
-        ttk.Button(f, text="Back",
-                   command=lambda: self._show("home")).pack()
-
+        ttk.Button(f, text="Start", padding=10, command=self._start_practice).pack(pady=10)
+        ttk.Button(f, text="Back", padding=10,command=lambda: self._show("home")).pack()
+    
+    # Create and displays practice game screen
     def _build_practice(self):
 
         f = self.screens["practice"]
@@ -146,7 +152,9 @@ class App(tk.Tk):
         self.feedback_lbl = tk.Label(f, text="", font=BIG_FONT)
         self.feedback_lbl.pack(pady=8)
 
+    # Displays results
     def _build_results(self):
+        """Build a result screen which shows the summary of the entire game played by now. It has a 'back to home' button to navigate back to home screen."""
         f = self.screens["results"]
         tk.Label(f, text="Session Summary", font=TITLE_FONT).pack(pady=10)
 
@@ -160,17 +168,17 @@ class App(tk.Tk):
         for n, frame in self.screens.items():
             frame.pack_forget()
         self.screens[name].pack(fill="both", expand=True)
-        self._refresh()
+
+        if name == "results":
+            self._render_results()
+
+        self._refresh
 
     # ---------- Stats helpers ----------
-    def _stats_text(self, long=False):
-        
-        s = self.state
-        acc = (s["correct"]/s["attempts"]*100) if s["attempts"] else 0
-        base = f"Coins: {s['coins']}  |  Attempts: {s['attempts']}  |  Correct: {s['correct']}  |  Accuracy: {acc:.0f}%"
-        if not long:
-            return base
-       
+    #Calculates amount of coins earned
+    # only if the screen is home or result screen
+    def _stats_text(self):
+        return f"Coins: {self.state['coins']}"
 
     def _refresh(self):
         self.stats_lbl.config(text=self._stats_text())
@@ -186,17 +194,21 @@ class App(tk.Tk):
         self._show("practice")
         self._next_question()
 
+    #displays next question and collects actions entered by user
     def _next_question(self):
         level = self.current_level.get()
         q, a = generate_question(level)
-        print("DEBUG:", level, "->", q, a)   # <-- should print something like: Easy -> 3 + 4 7
+        #prints("DEBUG:", level, "->", q, a)   # <-- should print something like: Easy -> 3 + 4 7
+        print("DEBUG:", level, "->", q, a)   
         self.current_q, self.current_ans = q, a
-        self.current_q, self.current_ans = generate_question(level)
+        self.current_q, self.current_ans = generate_question(level) 
         self.q_lbl.config(text=f"Solve:  {self.current_q}")
         self.answer_var.set("")
         self.feedback_lbl.config(text="", fg="#006400")
 
     def _submit_answer(self):
+        level = self.current_level.get()
+
         if self.current_q is None:
             return
 
@@ -207,6 +219,7 @@ class App(tk.Tk):
 
         # Update attempts
         self.state["attempts"] += 1
+        self.state["by_level"][level]["attempts"] += 1
 
         # Validate number
         try:
@@ -216,47 +229,68 @@ class App(tk.Tk):
             return
 
         # Check correctness
+        reward = 0
         if given == self.current_ans:
             self.state["correct"] += 1
+            self.state["by_level"][level]["correct"] += 1
             reward = draw_reward()
             self.state["coins"] += reward
+            self.state["by_level"][level]["coins"] += reward
             self.feedback_lbl.config(text=f"Correct! +{reward} coin(s) YAY! 🎉", fg="#006400")
         else:
             self.feedback_lbl.config(text=f"Not quite. Correct answer: {self.current_ans}", fg="#8B0000")
 
-        # Record history
+        # Record history 
         self.state["history"].append({
             "q": self.current_q,
             "given": raw,
             "ok": (given == self.current_ans),
-            "coins": reward if (given == self.current_ans) else 0
+            "coins": reward if (given == self.current_ans) else 0,
+            "level": level
         })
 
         self._refresh()
         # brief pause then next question
-        self.after(500, self._next_question)
+        self.after(2000, self._next_question)
 
     def _render_results(self):
         self.results_text.config(state="normal")
         self.results_text.delete("1.0", "end")
         s = self.state
-        acc = (s["correct"]/s["attempts"]*100) if s["attempts"] else 0
-        summary = [
-            f"Coins: {s['coins']}",
-            f"Attempts: {s['attempts']}",
-            f"Correct: {s['correct']}",
-            f"Accuracy: {acc:.1f}%",
-            "",
-            "Recent Answers:"
-        ]
-        self.results_text.insert("end", "\n".join(summary) + "\n")
-        for h in self.state["history"][-15:]:
-            self.results_text.insert("end", f"{h['q']} → {h['given']} | {'✓' if h['ok'] else '✗'} | +{h['coins']}c\n")
+
+        lines = []
+        lines.append("=== Session Summary ===")
+        lines.append(f"Coins obtained: {s['coins']}")
+        lines.append(f"Attempts: {s['attempts']}")
+        lines.append(f"Correct answers: {s['correct']}")
+        lines.append("")
+
+        lines.append("=== By Difficulty ===")
+
+        print("hello")
+        
+        for lvl, stats in s["by_level"].items():
+            att = stats["attempts"]
+            cor = stats["correct"]
+            coins = stats["coins"]
+            lines.append(f"{lvl:<6} → Attempts: {att:>3} | Correct: {cor:>3} | Coins: {coins}")
+
+        if s["history"]:
+            lines.append("\nRecent Answers:")
+        for h in s["history"][-10:]:
+            tick = "✓" if h["ok"] else "✗"
+            lines.append(f"[{h['level']}] {h['q']} → {h['given']} | {tick} | +{h['coins']}c")
+
+        self.results_text.insert("end", "\n".join(lines) + "\n")
         self.results_text.config(state="disabled")
 
     def _reset_session(self):
         if messagebox.askyesno("Confirm", "Reset current session stats?"):
-            self.state = {"attempts": 0, "correct": 0, "coins": 0, "history": []}
+            self.state = {"attempts": 0, 
+                          "correct": 0, 
+                          "coins": 0, 
+                          "history": [],
+                          "by_level": {lvl: {"attempts": 0, "correct": 0, "coins": 0} for lvl in DIFFICULTY_LEVELS.keys()}}
             self._refresh()
             if self.screens["practice"].winfo_ismapped():
                 self._next_question()
